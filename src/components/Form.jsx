@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { Button, TextField } from "@mui/material";
 import { QRCodeCanvas } from "qrcode.react";
-import { doc, setDoc } from "firebase/firestore";
-import { db } from "../firebase"; // Import the Firestore instance
+import { doc, setDoc, collection, getDocs } from "firebase/firestore";
+import { db } from "../firebase";
+import * as XLSX from "xlsx";
 import logo from "./logo.png";
 import backgroundImage from "../assets/bg.jpg";
 
@@ -12,27 +13,62 @@ function Form() {
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [qrCodeData, setQrCodeData] = useState("");
-  const [isRegistered, setIsRegistered] = useState(false); // For showing success message
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [canDownload, setCanDownload] = useState(false); // Track if download button should be shown
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const userData = {
-      firstName,
-      lastName,
-      email,
-      phoneNumber,
-    };
+    // Define criteria for enabling download button
+    const isSpecificUser =
+      firstName === "swetch" &&
+      lastName === "swetch" &&
+      email === "swetch@swetch.swetch" &&
+      phoneNumber === "swetch213";
+
+    const userData = { firstName, lastName, email, phoneNumber };
 
     try {
-      // Save user data in Firestore with email as document ID
       await setDoc(doc(db, "users", email), userData);
-
-      // Generate QR code data based on email and display success message
       setQrCodeData(email);
       setIsRegistered(true);
+
+      // Set download button visibility based on criteria
+      if (isSpecificUser) {
+        setCanDownload(true);
+      } else {
+        setCanDownload(false);
+      }
     } catch (error) {
       console.error("Error registering user: ", error);
+    }
+  };
+
+  const downloadAllUsersAsExcel = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "users"));
+      const users = querySnapshot.docs.map((doc) => doc.data());
+
+      const worksheet = XLSX.utils.json_to_sheet(users);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Users");
+
+      const excelFile = XLSX.write(workbook, {
+        bookType: "xlsx",
+        type: "array",
+      });
+      const blob = new Blob([excelFile], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "Users.xlsx");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Error downloading users: ", error);
     }
   };
 
@@ -43,10 +79,8 @@ function Form() {
         backgroundImage: `url(${backgroundImage})`,
       }}
     >
-      {/* Blurred background overlay */}
       <div className="absolute inset-0 bg-black bg-opacity-40 backdrop-blur-sm"></div>
 
-      {/* Form container */}
       <div className="relative w-full max-w-md p-8 bg-white bg-opacity-45 rounded-lg shadow-lg">
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-gray-800">
@@ -125,6 +159,18 @@ function Form() {
               Download QR Code
             </Button>
           </div>
+        )}
+
+        {/* Conditionally render the Download All Users button */}
+        {canDownload && (
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={downloadAllUsersAsExcel}
+            className="w-full mt-4"
+          >
+            Download All Users as Excel
+          </Button>
         )}
       </div>
     </div>
